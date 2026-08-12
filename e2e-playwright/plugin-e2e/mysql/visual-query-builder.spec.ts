@@ -97,6 +97,44 @@ test.describe(
       ).not.toHaveValue(`SELECT\n  createdAt\nFROM\n  grafana.normalTable\nWHERE\n  createdAt = NULL\nLIMIT\n  50`);
     });
 
+    test('visual query builder generates LIKE for contains and = for equals on mixed-case fields', async ({
+      explorePage,
+      page,
+    }) => {
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.headerTableSelector).click();
+      await page.getByText(normalTableName, { exact: true }).click();
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.selectColumn).click();
+      const select = page.getByLabel('Select options menu');
+      await select.locator(page.getByText('MixedCase', { exact: true })).click();
+
+      await page.getByRole('switch', { name: 'Filter' }).last().click({ force: true });
+      await page.getByRole('button', { name: 'Add filter' }).click();
+      await page.getByRole('button', { name: 'Add filter' }).click();
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.filterField).click();
+      await select.locator(page.getByText('MixedCase', { exact: true })).click();
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.filterOperator).click();
+      await select.locator(page.getByText('==', { exact: true })).click();
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.filterValue).fill('ok');
+
+      const preview = explorePage.getByGrafanaSelector(selectors.components.CodeEditor.container).getByRole('textbox');
+      await expect(preview).toHaveValue(
+        `SELECT\n  MixedCase\nFROM\n  grafana.normalTable\nWHERE\n  MixedCase = 'ok'\nLIMIT\n  50`
+      );
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.filterOperator).click();
+      await select.locator(page.getByText('contains', { exact: true })).click();
+
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.filterValue).fill('err');
+
+      await expect(preview).toHaveValue(
+        `SELECT\n  MixedCase\nFROM\n  grafana.normalTable\nWHERE\n  MixedCase LIKE '%err%'\nLIMIT\n  50`
+      );
+    });
+
     test('visual query builder should not crash when filter is set to select_any_in', async ({ explorePage, page }) => {
       const queryParams = new URLSearchParams();
       queryParams.set('schemaVersion', '1');

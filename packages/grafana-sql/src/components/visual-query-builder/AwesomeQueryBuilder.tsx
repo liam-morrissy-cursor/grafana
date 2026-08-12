@@ -44,6 +44,7 @@ const widgets: Widgets = {
         <Input
           value={props?.value || ''}
           placeholder={props?.placeholder}
+          data-testid={selectors.components.SQLQueryEditor.filterValue}
           onChange={(e) => props?.setValue(e.currentTarget.value)}
         />
       );

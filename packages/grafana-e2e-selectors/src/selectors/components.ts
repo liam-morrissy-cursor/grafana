@@ -1849,6 +1849,9 @@ export const versionedComponents = {
     filterOperator: {
       '11.0.0': 'data-testid filter-operator',
     },
+    filterValue: {
+      '13.2.0': 'data-testid filter-value',
+    },
     headerTableSelector: {
       '11.0.0': 'data-testid header-table-selector',
     },
