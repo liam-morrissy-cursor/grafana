@@ -31,3 +31,4 @@ export { makeVariable } from './utils/testHelpers';
 export { QueryEditorExpressionType } from './expressions';
 export { loadResources } from './loadResources';
 export { quoteIdentifierIfNecessary, unquoteIdentifier, type SqlIdentifierDialect } from './dialects/sqlIdentifier';
+export { quoteSqlWhereIdentifiers } from './utils/quoteSqlWhereIdentifiers';
