@@ -40,16 +40,16 @@ describe('toFlightSql', () => {
   });
 
   it('quotes contains / LIKE-style filters the same way as ==', () => {
-    expect(toFlightSql(queryWithWhere(`(MixedCase LIKE '%err%')`)).toContain(`("MixedCase" LIKE '%err%')`);
-    expect(toFlightSql(queryWithWhere(`(cpu.usage LIKE '%err%')`)).toContain(`("cpu.usage" LIKE '%err%')`);
-    expect(toFlightSql(queryWithWhere(`(host NOT LIKE '%prod%')`)).toContain(`("host" NOT LIKE '%prod%')`);
-    expect(toFlightSql(queryWithWhere(`(region ILIKE '%us%')`)).toContain(`("region" ILIKE '%us%')`);
-    expect(toFlightSql(queryWithWhere(`(host LIKE 'prod%')`)).toContain(`("host" LIKE 'prod%')`);
-    expect(toFlightSql(queryWithWhere(`(host LIKE '%prod')`)).toContain(`("host" LIKE '%prod')`);
+    expect(toFlightSql(queryWithWhere(`(MixedCase LIKE '%err%')`))).toContain(`("MixedCase" LIKE '%err%')`);
+    expect(toFlightSql(queryWithWhere(`(cpu.usage LIKE '%err%')`))).toContain(`("cpu.usage" LIKE '%err%')`);
+    expect(toFlightSql(queryWithWhere(`(host NOT LIKE '%prod%')`))).toContain(`("host" NOT LIKE '%prod%')`);
+    expect(toFlightSql(queryWithWhere(`(region ILIKE '%us%')`))).toContain(`("region" ILIKE '%us%')`);
+    expect(toFlightSql(queryWithWhere(`(host LIKE 'prod%')`))).toContain(`("host" LIKE 'prod%')`);
+    expect(toFlightSql(queryWithWhere(`(host LIKE '%prod')`))).toContain(`("host" LIKE '%prod')`);
   });
 
   it('quotes mixed-case == filters', () => {
-    expect(toFlightSql(queryWithWhere(`(MixedCase = 'ok')`)).toContain(`("MixedCase" = 'ok')`);
+    expect(toFlightSql(queryWithWhere(`(MixedCase = 'ok')`))).toContain(`("MixedCase" = 'ok')`);
   });
 
   it('should not wrap * with quote', () => {
