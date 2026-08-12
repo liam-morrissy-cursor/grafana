@@ -19,6 +19,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/dashboards"
 	"github.com/grafana/grafana/pkg/services/folder"
+	"github.com/grafana/grafana/pkg/services/librarypanels"
 	"github.com/grafana/grafana/pkg/services/provisioning/utils"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util"
@@ -63,6 +64,7 @@ type FileReader struct {
 	dashboardStore               utils.DashboardStore
 	FoldersFromFilesStructure    bool
 	folderService                folder.Service
+	libraryPanelService          librarypanels.Service
 	settingCfg                   *setting.Cfg
 
 	mux                     sync.RWMutex
@@ -72,7 +74,8 @@ type FileReader struct {
 
 // NewDashboardFileReader returns a new filereader based on `config`
 func NewDashboardFileReader(cfg *config, log log.Logger, service dashboards.DashboardProvisioningService,
-	dashboardStore utils.DashboardStore, folderService folder.Service, settingCfg *setting.Cfg) (*FileReader, error) {
+	dashboardStore utils.DashboardStore, folderService folder.Service, settingCfg *setting.Cfg,
+	libraryPanelService librarypanels.Service) (*FileReader, error) {
 	var path string
 	path, ok := cfg.Options["path"].(string)
 	if !ok {
@@ -97,6 +100,7 @@ func NewDashboardFileReader(cfg *config, log log.Logger, service dashboards.Dash
 		dashboardStore:               dashboardStore,
 		folderService:                folderService,
 		FoldersFromFilesStructure:    foldersFromFilesStructure,
+		libraryPanelService:          libraryPanelService,
 		settingCfg:                   settingCfg,
 		usageTracker:                 newUsageTracker(),
 	}, nil
@@ -362,6 +366,10 @@ func (fr *FileReader) saveDashboard(ctx context.Context, path string, folderID i
 		dash.Dashboard.SetID(provisionedData.DashboardID)
 	}
 
+	if err := fr.ensureLibraryPanels(ctx, dash); err != nil {
+		return provisioningMetadata, err
+	}
+
 	if !fr.isDatabaseAccessRestricted() {
 		metrics.MFolderIDsServiceCount.WithLabelValues(metrics.Provisioning).Inc()
 		// nolint:staticcheck
@@ -386,6 +394,30 @@ func (fr *FileReader) saveDashboard(ctx context.Context, path string, folderID i
 	}
 
 	return provisioningMetadata, nil
+}
+
+func (fr *FileReader) ensureLibraryPanels(ctx context.Context, dash *dashboards.SaveDashboardDTO) error {
+	if fr.libraryPanelService == nil || dash == nil || dash.Dashboard == nil || dash.Dashboard.Data == nil {
+		return nil
+	}
+
+	ctx, ident := identity.WithServiceIdentity(ctx, dash.OrgID)
+	// nolint:staticcheck
+	unresolved, err := fr.libraryPanelService.EnsureLibraryPanelsForProvisionedDashboard(
+		ctx, ident, dash.Dashboard.Data, dash.Dashboard.FolderID, dash.Dashboard.FolderUID,
+	)
+	if err != nil {
+		return err
+	}
+	for _, uid := range unresolved {
+		fr.log.Warn("Provisioned dashboard references a library panel that could not be created or found",
+			"provisioner", fr.Cfg.Name,
+			"dashboardUid", dash.Dashboard.UID,
+			"dashboardTitle", dash.Dashboard.Title,
+			"libraryPanelUid", uid,
+			"hint", "Provision the library panel first, or include it under __elements in the dashboard JSON (export for sharing externally)")
+	}
+	return nil
 }
 
 func (fr *FileReader) getProvisionedDashboardsByPath(ctx context.Context, service dashboards.DashboardProvisioningService, name string) (

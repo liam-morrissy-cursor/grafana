@@ -42,6 +42,10 @@ func ProvideService(cfg *setting.Cfg, sqlStore db.DB, routeRegister routing.Rout
 // Service is a service for operating on library panels.
 type Service interface {
 	ImportLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error
+	// EnsureLibraryPanelsForProvisionedDashboard creates missing library panels referenced by a
+	// provisioned dashboard JSON (using __elements and/or embedded panel models), strips export-only
+	// metadata, and returns UIDs that could not be resolved.
+	EnsureLibraryPanelsForProvisionedDashboard(c context.Context, signedInUser identity.Requester, dash *simplejson.Json, folderID int64, folderUID string) (unresolvedUIDs []string, err error)
 }
 
 type LibraryInfo struct {
@@ -67,10 +71,65 @@ func isLibraryPanelOrRow(panel *simplejson.Json, panelType string) bool {
 
 // ImportLibraryPanelsForDashboard loops through all panels in dashboard JSON and creates any missing library panels in the database.
 func (lps *LibraryPanelService) ImportLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error {
-	return importLibraryPanelsRecursively(c, lps.LibraryElementService, signedInUser, libraryPanels, panels, folderID, folderUID)
+	_, err := importLibraryPanelsRecursively(c, lps.LibraryElementService, signedInUser, libraryPanels, panels, folderID, folderUID)
+	return err
 }
 
-func importLibraryPanelsRecursively(c context.Context, service libraryelements.Service, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error {
+// EnsureLibraryPanelsForProvisionedDashboard prepares a provisioned dashboard's JSON for save by
+// creating missing library panels and removing export-only metadata (__elements, __inputs, __requires).
+func (lps *LibraryPanelService) EnsureLibraryPanelsForProvisionedDashboard(c context.Context, signedInUser identity.Requester, dash *simplejson.Json, folderID int64, folderUID string) ([]string, error) {
+	if dash == nil {
+		return nil, nil
+	}
+
+	libraryElements := dash.Get("__elements")
+	if libraryElements.Interface() == nil {
+		libraryElements = simplejson.New()
+	}
+
+	// Export-only metadata must not be persisted on the dashboard blob.
+	dash.Del("__elements")
+	dash.Del("__inputs")
+	dash.Del("__requires")
+
+	unresolved, err := importLibraryPanelsRecursively(c, lps.LibraryElementService, signedInUser, libraryElements, dash.Get("panels").MustArray(), folderID, folderUID)
+	if err != nil {
+		return unresolved, err
+	}
+	return unresolved, nil
+}
+
+func isUsableEmbeddedLibraryPanelModel(panelType string) bool {
+	return panelType != "" && panelType != "library-panel-ref" && panelType != "row"
+}
+
+func libraryPanelModelFromSources(libraryPanels *simplejson.Json, panelAsJSON *simplejson.Json, uid string) (*simplejson.Json, bool) {
+	elementModel := libraryPanels.Get(uid).Get("model")
+	if elementModel.Interface() != nil {
+		return elementModel, true
+	}
+
+	// Legacy / provisioned dashboards often keep the full panel body alongside libraryPanel.
+	// Modern saves use type "library-panel-ref" with no usable model; those need __elements or a pre-existing element.
+	panelType := panelAsJSON.Get("type").MustString()
+	if !isUsableEmbeddedLibraryPanelModel(panelType) {
+		return nil, false
+	}
+
+	raw, err := panelAsJSON.MarshalJSON()
+	if err != nil {
+		return nil, false
+	}
+	cloned, err := simplejson.NewJson(raw)
+	if err != nil {
+		return nil, false
+	}
+	return cloned, true
+}
+
+func importLibraryPanelsRecursively(c context.Context, service libraryelements.Service, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) ([]string, error) {
+	var unresolved []string
+
 	for _, panel := range panels {
 		panelAsJSON := simplejson.NewFromAny(panel)
 		libraryPanel := panelAsJSON.Get("libraryPanel")
@@ -81,17 +140,18 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 
 		// we have a row
 		if panelType == "row" {
-			err := importLibraryPanelsRecursively(c, service, signedInUser, libraryPanels, panelAsJSON.Get("panels").MustArray(), folderID, folderUID)
+			nestedUnresolved, err := importLibraryPanelsRecursively(c, service, signedInUser, libraryPanels, panelAsJSON.Get("panels").MustArray(), folderID, folderUID)
 			if err != nil {
-				return err
+				return append(unresolved, nestedUnresolved...), err
 			}
+			unresolved = append(unresolved, nestedUnresolved...)
 			continue
 		}
 
 		// we have a library panel
 		UID := libraryPanel.Get("uid").MustString()
 		if len(UID) == 0 {
-			return errLibraryPanelHeaderUIDMissing
+			return unresolved, errLibraryPanelHeaderUIDMissing
 		}
 
 		_, err := service.GetElement(c, signedInUser, model.GetLibraryElementCommand{UID: UID, FolderName: dashboards.RootFolderName})
@@ -102,17 +162,22 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 		if errors.Is(err, model.ErrLibraryElementNotFound) {
 			name := libraryPanel.Get("name").MustString()
 			if len(name) == 0 {
-				return errLibraryPanelHeaderNameMissing
+				return unresolved, errLibraryPanelHeaderNameMissing
 			}
 
-			elementModel := libraryPanels.Get(UID).Get("model")
+			elementModel, ok := libraryPanelModelFromSources(libraryPanels, panelAsJSON, UID)
+			if !ok {
+				unresolved = append(unresolved, UID)
+				continue
+			}
+
 			elementModel.Set("libraryPanel", map[string]any{
 				"uid": UID,
 			})
 
 			Model, err := json.Marshal(&elementModel)
 			if err != nil {
-				return err
+				return unresolved, err
 			}
 
 			metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryPanels).Inc()
@@ -126,16 +191,16 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 			}
 			_, err = service.CreateElement(c, signedInUser, cmd)
 			if err != nil {
-				return err
+				return unresolved, err
 			}
 
 			continue
 		}
 
-		return err
+		return unresolved, err
 	}
 
-	return nil
+	return unresolved, nil
 }
 
 // CountInFolder is a handler for retrieving the number of library panels contained

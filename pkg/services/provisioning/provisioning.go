@@ -26,6 +26,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/encryption"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/folder"
+	"github.com/grafana/grafana/pkg/services/librarypanels"
 	alertingauthz "github.com/grafana/grafana/pkg/services/ngalert/accesscontrol"
 	ngmodels "github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/ngalert/notifier"
@@ -87,6 +88,7 @@ func ProvideService(
 	promTypeMigrationProvider promtypemigration.PromTypeMigrationProvider,
 	serverLockService *serverlock.ServerLockService,
 	routesPermissions accesscontrol.RoutePermissionsService,
+	libraryPanelService librarypanels.Service,
 ) (*ProvisioningServiceImpl, error) {
 	s := &ProvisioningServiceImpl{
 		ruleMutationValidator:        ruleMutationValidator,
@@ -118,6 +120,7 @@ func ProvideService(
 		dual:                         dual,
 		serverLock:                   serverLockService,
 		routesPermissions:            routesPermissions,
+		libraryPanelService:          libraryPanelService,
 
 		dashboardProvisionRetries:      defaultDashboardProvisionRetries,
 		dashboardProvisionRetryBackoff: defaultDashboardProvisionRetryBackoff,
@@ -251,7 +254,7 @@ func (ps *ProvisioningServiceImpl) running(ctx context.Context) error {
 
 func (ps *ProvisioningServiceImpl) setDashboardProvisioner() error {
 	dashboardPath := filepath.Join(ps.Cfg.ProvisioningPath, "dashboards")
-	dashProvisioner, err := ps.newDashboardProvisioner(context.Background(), dashboardPath, ps.dashboardProvisioningService, ps.Cfg, ps.orgService, ps.dashboardService, ps.folderService, ps.serverLock)
+	dashProvisioner, err := ps.newDashboardProvisioner(context.Background(), dashboardPath, ps.dashboardProvisioningService, ps.Cfg, ps.orgService, ps.dashboardService, ps.folderService, ps.serverLock, ps.libraryPanelService)
 	if err != nil {
 		return fmt.Errorf("%v: %w", "Failed to create provisioner", err)
 	}
@@ -333,6 +336,7 @@ type ProvisioningServiceImpl struct {
 	dual                         dualwrite.Service
 	serverLock                   *serverlock.ServerLockService
 	migratePrometheusType        func(context.Context) error
+	libraryPanelService          librarypanels.Service
 
 	dashboardProvisionRetries      int
 	dashboardProvisionRetryBackoff time.Duration

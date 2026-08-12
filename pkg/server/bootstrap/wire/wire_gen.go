@@ -683,7 +683,12 @@ func Initialize(ctx context.Context, cfg *setting.Cfg, opts server.Options, apiO
 	if err != nil {
 		return nil, err
 	}
-	provisioningServiceImpl, err := provisioning.ProvideService(accessControl, ruleMutationValidator, cfg, sqlStore, pluginstoreService, dBstore, serviceService, notificationService, dashboardProvisioningService, service13, correlationsService, dashboardService, folderimplService, service12, quotaService, secretsService, orgService, userimplService, receiverPermissionsService, tracingService, dualwriteService, promTypeMigrationProviderImpl, serverLockService, routePermissionsService)
+	libraryElementService := libraryelements.ProvideService(cfg, sqlStore, routeRegisterImpl, folderimplService, featureToggles, accessControl, dashboardService, eventualRestConfigProvider, userimplService)
+	libraryPanelService, err := librarypanels.ProvideService(cfg, sqlStore, routeRegisterImpl, libraryElementService, folderimplService)
+	if err != nil {
+		return nil, err
+	}
+	provisioningServiceImpl, err := provisioning.ProvideService(accessControl, ruleMutationValidator, cfg, sqlStore, pluginstoreService, dBstore, serviceService, notificationService, dashboardProvisioningService, service13, correlationsService, dashboardService, folderimplService, service12, quotaService, secretsService, orgService, userimplService, receiverPermissionsService, tracingService, dualwriteService, promTypeMigrationProviderImpl, serverLockService, routePermissionsService, libraryPanelService)
 	if err != nil {
 		return nil, err
 	}
@@ -707,11 +712,6 @@ func Initialize(ctx context.Context, cfg *setting.Cfg, opts server.Options, apiO
 	tagimplService := tagimpl.ProvideService(sqlStore)
 	repositoryImpl := annotationsimpl.ProvideService(sqlStore, cfg, featureToggles, tagimplService, tracingService, dBstore, dashboardService, registerer)
 	alertNG, err := ngalert.ProvideService(cfg, featureToggles, cacheServiceImpl, service13, routeRegisterImpl, sqlStore, kvStore, exprService, dataSourceProxyService, ruleMutationValidator, quotaService, secretsService, notificationService, ngAlert, folderimplService, accessControl, dashboardService, renderingService, inProcBus, acimplService, repositoryImpl, pluginstoreService, tracingService, dBstore, httpclientProvider, plugincontextProvider, receiverPermissionsService, routePermissionsService, userimplService, orgService, clientGenerator)
-	if err != nil {
-		return nil, err
-	}
-	libraryElementService := libraryelements.ProvideService(cfg, sqlStore, routeRegisterImpl, folderimplService, featureToggles, accessControl, dashboardService, eventualRestConfigProvider, userimplService)
-	libraryPanelService, err := librarypanels.ProvideService(cfg, sqlStore, routeRegisterImpl, libraryElementService, folderimplService)
 	if err != nil {
 		return nil, err
 	}
@@ -1434,7 +1434,12 @@ func InitializeForTest(ctx context.Context, t sqlutil.ITestDB, testingT interfac
 	if err != nil {
 		return nil, err
 	}
-	provisioningServiceImpl, err := provisioning.ProvideService(accessControl, ruleMutationValidator, cfg, sqlStore, pluginstoreService, dBstore, serviceService, notificationService, dashboardProvisioningService, service13, correlationsService, dashboardService, folderimplService, service12, quotaService, secretsService, orgService, userimplService, receiverPermissionsService, tracingService, dualwriteService, promTypeMigrationProviderImpl, serverLockService, routePermissionsService)
+	libraryElementService := libraryelements.ProvideService(cfg, sqlStore, routeRegisterImpl, folderimplService, featureToggles, accessControl, dashboardService, eventualRestConfigProvider, userimplService)
+	libraryPanelService, err := librarypanels.ProvideService(cfg, sqlStore, routeRegisterImpl, libraryElementService, folderimplService)
+	if err != nil {
+		return nil, err
+	}
+	provisioningServiceImpl, err := provisioning.ProvideService(accessControl, ruleMutationValidator, cfg, sqlStore, pluginstoreService, dBstore, serviceService, notificationService, dashboardProvisioningService, service13, correlationsService, dashboardService, folderimplService, service12, quotaService, secretsService, orgService, userimplService, receiverPermissionsService, tracingService, dualwriteService, promTypeMigrationProviderImpl, serverLockService, routePermissionsService, libraryPanelService)
 	if err != nil {
 		return nil, err
 	}
@@ -1467,11 +1472,6 @@ func InitializeForTest(ctx context.Context, t sqlutil.ITestDB, testingT interfac
 	tagimplService := tagimpl.ProvideService(sqlStore)
 	repositoryImpl := annotationsimpl.ProvideService(sqlStore, cfg, featureToggles, tagimplService, tracingService, dBstore, dashboardService, registerer)
 	alertNG, err := ngalert.ProvideService(cfg, featureToggles, cacheServiceImpl, service13, routeRegisterImpl, sqlStore, kvStore, exprService, dataSourceProxyService, ruleMutationValidator, quotaService, secretsService, notificationServiceMock, ngAlert, folderimplService, accessControl, dashboardService, renderingService, inProcBus, acimplService, repositoryImpl, pluginstoreService, tracingService, dBstore, httpclientProvider, plugincontextProvider, receiverPermissionsService, routePermissionsService, userimplService, orgService, clientGenerator)
-	if err != nil {
-		return nil, err
-	}
-	libraryElementService := libraryelements.ProvideService(cfg, sqlStore, routeRegisterImpl, folderimplService, featureToggles, accessControl, dashboardService, eventualRestConfigProvider, userimplService)
-	libraryPanelService, err := librarypanels.ProvideService(cfg, sqlStore, routeRegisterImpl, libraryElementService, folderimplService)
 	if err != nil {
 		return nil, err
 	}
