@@ -13,14 +13,20 @@ import { type SQLExpression } from '../types';
 export function createSelectClause(sqlColumns: NonNullable<SQLExpression['columns']>): string {
   const columns = sqlColumns.map((c) => {
     let rawColumn = '';
+    // Unnamed parameters are placeholders (e.g. COUNT with no column picked yet); skip them
+    // so the literal identifier `undefined` never ends up in the generated SQL.
+    const params = (c.parameters ?? [])
+      .map((p) => p.name)
+      .filter((name): name is string => Boolean(name))
+      .join(',');
     if (c.name && c.alias) {
-      rawColumn += `${c.name}(${c.parameters?.map((p) => `${p.name}`)}) AS ${c.alias}`;
+      rawColumn += `${c.name}(${params}) AS ${c.alias}`;
     } else if (c.name) {
-      rawColumn += `${c.name}(${c.parameters?.map((p) => `${p.name}`)})`;
+      rawColumn += `${c.name}(${params})`;
     } else if (c.alias) {
-      rawColumn += `${c.parameters?.map((p) => `${p.name}`)} AS ${c.alias}`;
+      rawColumn += `${params} AS ${c.alias}`;
     } else {
-      rawColumn += `${c.parameters?.map((p) => `${p.name}`)}`;
+      rawColumn += params;
     }
     return rawColumn;
   });
@@ -32,7 +38,7 @@ export const haveColumns = (columns: SQLExpression['columns']): columns is NonNu
     return false;
   }
 
-  const haveColumn = columns.some((c) => c.parameters?.length || c.parameters?.some((p) => p.name));
+  const haveColumn = columns.some((c) => c.parameters?.some((p) => p.name));
   const haveFunction = columns.some((c) => c.name);
   return haveColumn || haveFunction;
 };
