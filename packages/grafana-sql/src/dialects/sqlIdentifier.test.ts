@@ -23,6 +23,11 @@ describe('quoteIdentifierIfNecessary', () => {
     expect(quoteIdentifierIfNecessary('we`ird', 'mysql')).toBe('`we``ird`');
     expect(quoteIdentifierIfNecessary('we"ird', 'standard')).toBe('"we""ird"');
   });
+
+  it('quotes dotted names as a single identifier for standard and mysql', () => {
+    expect(quoteIdentifierIfNecessary('sales.east.revenue', 'standard')).toBe('"sales.east.revenue"');
+    expect(quoteIdentifierIfNecessary('sales.east.revenue', 'mysql')).toBe('`sales.east.revenue`');
+  });
 });
 
 describe('unquoteIdentifier', () => {
@@ -52,5 +57,10 @@ describe('unquoteIdentifier', () => {
   it('leaves mismatched or partial quotes untouched', () => {
     expect(unquoteIdentifier('`table A', 'mysql')).toBe('`table A');
     expect(unquoteIdentifier('`', 'mysql')).toBe('`');
+  });
+
+  it('unquotes dotted names as a single identifier for standard and mysql', () => {
+    expect(unquoteIdentifier('"sales.east.revenue"', 'standard')).toBe('sales.east.revenue');
+    expect(unquoteIdentifier('`sales.east.revenue`', 'mysql')).toBe('sales.east.revenue');
   });
 });
