@@ -1,6 +1,6 @@
 import { injectGlobal } from '@emotion/css';
 import { Builder, type Config, type ImmutableTree, Query, Utils } from '@react-awesome-query-builder/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type SQLExpression } from '../../types';
 
@@ -12,9 +12,15 @@ interface SQLBuilderWhereRowProps {
   config?: Partial<Config>;
 }
 
+function fieldsFingerprint(fields: Config['fields'] | undefined): string {
+  return JSON.stringify(fields ?? {});
+}
+
 export function WhereRow({ sql, config, onSqlChange }: SQLBuilderWhereRowProps) {
   const [tree, setTree] = useState<ImmutableTree>();
   const configWithDefaults = useMemo(() => ({ ...raqbConfig, ...config }), [config]);
+  const fieldsKey = fieldsFingerprint(config?.fields);
+  const prevFieldsKey = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     // Set the initial tree
@@ -29,6 +35,21 @@ export function WhereRow({ sql, config, onSqlChange }: SQLBuilderWhereRowProps) 
       setTree(Utils.checkTree(Utils.loadTree(emptyInitTree), configWithDefaults));
     }
   }, [configWithDefaults, sql.whereJsonTree]);
+
+  // When column metadata loads (or otherwise changes), re-validate from the persisted
+  // whereJsonTree. RAQB may have stripped operators while fields were empty; reloading
+  // from sql restores them without remounting the editor (which wiped in-progress edits).
+  useEffect(() => {
+    if (prevFieldsKey.current === undefined) {
+      prevFieldsKey.current = fieldsKey;
+      return;
+    }
+    if (prevFieldsKey.current === fieldsKey) {
+      return;
+    }
+    prevFieldsKey.current = fieldsKey;
+    setTree(Utils.checkTree(Utils.loadTree(sql.whereJsonTree ?? emptyInitTree), configWithDefaults));
+  }, [configWithDefaults, fieldsKey, sql.whereJsonTree]);
 
   const onTreeChange = useCallback(
     (changedTree: ImmutableTree, config: Config) => {

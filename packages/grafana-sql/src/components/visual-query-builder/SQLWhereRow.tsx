@@ -1,4 +1,4 @@
-import { useAsync } from 'react-use';
+import { useMemo } from 'react';
 
 import { type SelectableValue, type TypedVariableModel } from '@grafana/data';
 import { getTemplateSrv } from '@grafana/runtime';
@@ -18,17 +18,22 @@ interface WhereRowProps {
 }
 
 export function SQLWhereRow({ query, fields, onQueryChange, db }: WhereRowProps) {
-  const state = useAsync(async () => {
-    return mapFieldsToTypes(fields);
-  }, [fields]);
+  // Stabilize on field contents: the parent often passes a new [] while columns load.
+  const fieldsKey = useMemo(
+    () => JSON.stringify(fields.map((f) => [f.value, f.raqbFieldType, f.icon])),
+    [fields]
+  );
+  const config = useMemo(
+    () => ({ fields: mapFieldsToTypes(fields) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fieldsKey fingerprints column metadata
+    [fieldsKey]
+  );
 
   const { onSqlChange } = useSqlChange({ query, onQueryChange, db });
 
   return (
     <WhereRow
-      // TODO: fix key that's used to force clean render or SQLWhereRow - otherwise it doesn't render operators correctly
-      key={JSON.stringify(state.value)}
-      config={{ fields: state.value || {} }}
+      config={config}
       sql={query.sql!}
       onSqlChange={(val: SQLExpression) => {
         const templateVars = getTemplateSrv().getVariables();
