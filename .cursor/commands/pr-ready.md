@@ -8,7 +8,7 @@ Run the repository **Human Review Gates** checklist from `AGENTS.md` for the cur
 2. Confirm focused scope (no drive-by refactors).
 3. Confirm tests or lint relevant to the change were run, or state explicitly what still needs to run.
 4. Call out any secrets, credentials, or generated noise that should not ship.
-5. **Stop before `git push`** unless the user has already given explicit push approval in this conversation.
+5. For interactive local chats: **stop before `git push`** unless the user has already given explicit push approval in this conversation. Unattended Cloud Agents skip this command and push per `AGENTS.md` Human Review Gates.
 
 ## Report back
 
