@@ -371,3 +371,7 @@ func (s *libraryPanelServiceMock) ImportLibraryPanelsForDashboard(ctx context.Co
 
 	return nil
 }
+
+func (s *libraryPanelServiceMock) EnsureLibraryPanelsForProvisionedDashboard(ctx context.Context, signedInUser identity.Requester, dash *simplejson.Json, folderID int64, folderUID string) ([]string, error) {
+	return nil, nil
+}

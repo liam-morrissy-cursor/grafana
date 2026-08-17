@@ -290,6 +290,115 @@ func TestIntegrationImportLibraryPanelsForDashboard(t *testing.T) {
 				t.Fatalf("Result mismatch (-want +got):\n%s", diff)
 			}
 		})
+
+	testScenario(t, "When provisioning a dashboard with an embedded library panel model and no __elements, it should create the missing library panel",
+		func(t *testing.T, sc scenarioContext) {
+			var missingUID = "embeddedUID1"
+			var missingName = "Embedded Library Panel"
+			panels := []any{
+				map[string]any{
+					"id":    int64(2),
+					"type":  "text",
+					"title": missingName,
+					"options": map[string]any{
+						"content": "from embedded model",
+					},
+					"libraryPanel": map[string]any{
+						"uid":  missingUID,
+						"name": missingName,
+					},
+				},
+			}
+
+			_, err := sc.elementService.GetElement(sc.ctx, sc.user,
+				model.GetLibraryElementCommand{UID: missingUID, FolderName: dashboards.RootFolderName})
+			require.EqualError(t, err, model.ErrLibraryElementNotFound.Error())
+
+			err = sc.service.ImportLibraryPanelsForDashboard(sc.ctx, sc.user, simplejson.New(), panels, 0, "")
+			require.NoError(t, err)
+
+			element, err := sc.elementService.GetElement(sc.ctx, sc.user,
+				model.GetLibraryElementCommand{UID: missingUID, FolderName: dashboards.RootFolderName})
+			require.NoError(t, err)
+			require.Equal(t, missingName, element.Name)
+			require.Equal(t, "text", element.Type)
+		})
+
+	testScenario(t, "When provisioning a dashboard with only library-panel-ref stubs and no __elements, unresolved UIDs are returned and no empty panel is created",
+		func(t *testing.T, sc scenarioContext) {
+			var missingUID = "stubUID123"
+			dash := simplejson.NewFromAny(map[string]any{
+				"title": "Provisioned with stub",
+				"panels": []any{
+					map[string]any{
+						"id":    1,
+						"type":  "library-panel-ref",
+						"title": "Stub",
+						"libraryPanel": map[string]any{
+							"uid":  missingUID,
+							"name": "Stub Panel",
+						},
+					},
+				},
+				"__elements": map[string]any{},
+				"__inputs":   []any{},
+				"__requires": []any{},
+			})
+
+			unresolved, err := sc.lps.EnsureLibraryPanelsForProvisionedDashboard(sc.ctx, sc.user, dash, 0, "")
+			require.NoError(t, err)
+			require.Equal(t, []string{missingUID}, unresolved)
+			require.Nil(t, dash.Get("__elements").Interface())
+			require.Nil(t, dash.Get("__inputs").Interface())
+			require.Nil(t, dash.Get("__requires").Interface())
+
+			_, err = sc.elementService.GetElement(sc.ctx, sc.user,
+				model.GetLibraryElementCommand{UID: missingUID, FolderName: dashboards.RootFolderName})
+			require.EqualError(t, err, model.ErrLibraryElementNotFound.Error())
+		})
+
+	testScenario(t, "When provisioning a dashboard JSON with __elements, missing library panels are created and export metadata is stripped",
+		func(t *testing.T, sc scenarioContext) {
+			var missingUID = "provElemUID"
+			var missingName = "Provisioned Element"
+			var missingModel = map[string]any{
+				"type":  "text",
+				"title": missingName,
+			}
+			dash := simplejson.NewFromAny(map[string]any{
+				"title": "Provisioned with elements",
+				"panels": []any{
+					map[string]any{
+						"id":   1,
+						"type": "library-panel-ref",
+						"libraryPanel": map[string]any{
+							"uid":  missingUID,
+							"name": missingName,
+						},
+					},
+				},
+				"__elements": map[string]any{
+					missingUID: map[string]any{
+						"model": missingModel,
+					},
+				},
+				"__inputs": []any{
+					map[string]any{"name": "DS_TEST", "type": "datasource"},
+				},
+			})
+
+			unresolved, err := sc.lps.EnsureLibraryPanelsForProvisionedDashboard(sc.ctx, sc.user, dash, 0, "")
+			require.NoError(t, err)
+			require.Empty(t, unresolved)
+			require.Nil(t, dash.Get("__elements").Interface())
+			require.Nil(t, dash.Get("__inputs").Interface())
+
+			element, err := sc.elementService.GetElement(sc.ctx, sc.user,
+				model.GetLibraryElementCommand{UID: missingUID, FolderName: dashboards.RootFolderName})
+			require.NoError(t, err)
+			require.Equal(t, missingName, element.Name)
+			require.Equal(t, "text", element.Type)
+		})
 }
 
 type libraryPanel struct {
