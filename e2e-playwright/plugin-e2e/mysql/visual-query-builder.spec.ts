@@ -137,6 +137,7 @@ test.describe(
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
       // The compact preview clips the query, so Monaco only renders the first few lines.
+      await expect.poll(() => renderedLines.count()).toBeGreaterThan(0);
       expect(await renderedLines.count()).toBeLessThan(formattedLineCount);
       const collapsedHeight = (await preview.boundingBox())?.height;
       await testInfo.attach('preview-collapsed.png', {
