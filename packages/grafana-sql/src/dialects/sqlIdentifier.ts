@@ -13,28 +13,20 @@ const SQL_IDENTIFIER_DIALECTS = {
 export function quoteIdentifierIfNecessary(value: string, dialect: SqlIdentifierDialect): string {
   const { quote, unquotedPattern } = SQL_IDENTIFIER_DIALECTS[dialect];
 
-  // Qualified names (db.schema.table) are quoted per segment so each level
-  // resolves independently.
-  return value
-    .split('.')
-    .map((segment) =>
-      unquotedPattern.test(segment) ? segment : `${quote}${segment.replaceAll(quote, `${quote}${quote}`)}${quote}`
-    )
-    .join('.');
+  if (unquotedPattern.test(value)) {
+    return value;
+  }
+
+  return `${quote}${value.replaceAll(quote, `${quote}${quote}`)}${quote}`;
 }
 
 export function unquoteIdentifier(identifier: string, dialect: SqlIdentifierDialect): string {
+  const trimmed = identifier.trim();
   const { quote } = SQL_IDENTIFIER_DIALECTS[dialect];
 
-  return identifier
-    .trim()
-    .split('.')
-    .map((segment) => {
-      if (segment.length >= 2 && segment.startsWith(quote) && segment.endsWith(quote)) {
-        return segment.slice(1, -1).replaceAll(`${quote}${quote}`, quote);
-      }
+  if (trimmed.length >= 2 && trimmed.startsWith(quote) && trimmed.endsWith(quote)) {
+    return trimmed.slice(1, -1).replaceAll(`${quote}${quote}`, quote);
+  }
 
-      return segment;
-    })
-    .join('.');
+  return trimmed;
 }
