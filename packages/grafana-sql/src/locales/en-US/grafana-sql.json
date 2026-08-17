@@ -45,6 +45,7 @@
       "preview": {
         "label-element": {
           "preview": "Preview",
+          "tooltip-copied": "Copied",
           "tooltip-copy-to-clipboard": "Copy to clipboard"
         }
       },

@@ -52,6 +52,23 @@ test.describe(
       );
     });
 
+    test('visual query builder should confirm copying the preview', async ({ explorePage, page }) => {
+      await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.headerTableSelector).click();
+      await page.getByText(normalTableName, { exact: true }).click();
+
+      const copyButton = page.getByRole('button', { name: 'Copy to clipboard' });
+      await expect(copyButton).toBeVisible();
+
+      await copyButton.click();
+
+      // The copy affordance is replaced by a check icon labelled "Copied" for two seconds.
+      await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+      await expect(copyButton).toBeHidden();
+
+      await expect(copyButton).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Copied' })).toBeHidden();
+    });
+
     test('visual query builder should handle time filter macro', async ({ explorePage, page }) => {
       await explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.headerTableSelector).click();
       await page.getByText(normalTableName, { exact: true }).click();
