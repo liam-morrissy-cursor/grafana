@@ -45,7 +45,9 @@
       "preview": {
         "label-element": {
           "preview": "Preview",
-          "tooltip-copy-to-clipboard": "Copy to clipboard"
+          "tooltip-collapse-preview": "Collapse preview",
+          "tooltip-copy-to-clipboard": "Copy to clipboard",
+          "tooltip-expand-preview": "Expand preview"
         }
       },
       "query-header": {

@@ -6,6 +6,12 @@ import { mockDataSourceRequest } from './utils';
 
 test.beforeEach(mockDataSourceRequest);
 
+// Long enough that formatSQL wraps it past the compact preview height, short enough that the
+// expanded preview shows every line.
+const clippedRawSql = 'SELECT createdAt, name, bigint FROM grafana.normalTable WHERE name IS NOT NULL LIMIT 50';
+const formattedClippedRawSql = `SELECT\n  createdAt,\n  name,\n  bigint\nFROM\n  grafana.normalTable\nWHERE\n  name IS NOT NULL\nLIMIT\n  50`;
+const formattedLineCount = formattedClippedRawSql.split('\n').length;
+
 test.describe(
   'mysql',
   {
@@ -95,6 +101,65 @@ test.describe(
       await expect(
         explorePage.getByGrafanaSelector(selectors.components.CodeEditor.container).getByRole('textbox')
       ).not.toHaveValue(`SELECT\n  createdAt\nFROM\n  grafana.normalTable\nWHERE\n  createdAt = NULL\nLIMIT\n  50`);
+    });
+
+    test('visual query builder preview can be expanded to reveal the full query', async ({ explorePage }, testInfo) => {
+      const queryParams = new URLSearchParams();
+      queryParams.set('schemaVersion', '1');
+      queryParams.set('orgId', '1');
+      queryParams.set(
+        'panes',
+        JSON.stringify({
+          mmm: {
+            datasource: 'P4FDCC188E688367F',
+            queries: [
+              {
+                refId: 'A',
+                datasource: { type: 'mysql', uid: 'P4FDCC188E688367F' },
+                format: 'table',
+                rawSql: clippedRawSql,
+                editorMode: 'builder',
+                dataset: 'grafana',
+                table: 'normalTable',
+              },
+            ],
+          },
+        })
+      );
+
+      await explorePage.goto({ queryParams });
+
+      const preview = explorePage.getByGrafanaSelector(selectors.components.CodeEditor.container);
+      const toggle = explorePage.getByGrafanaSelector(selectors.components.SQLQueryEditor.previewToggleExpand);
+      const renderedLines = preview.locator('.view-line');
+
+      await expect(preview.getByRole('textbox')).toHaveValue(formattedClippedRawSql);
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+      // The compact preview clips the query, so Monaco only renders the first few lines.
+      await expect.poll(() => renderedLines.count()).toBeGreaterThan(0);
+      expect(await renderedLines.count()).toBeLessThan(formattedLineCount);
+      const collapsedHeight = (await preview.boundingBox())?.height;
+      await testInfo.attach('preview-collapsed.png', {
+        body: await explorePage.getByGrafanaSelector(selectors.components.QueryEditorRows.rows).screenshot(),
+        contentType: 'image/png',
+      });
+
+      await toggle.click();
+
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect.poll(() => renderedLines.count()).toBe(formattedLineCount);
+      const expandedHeight = (await preview.boundingBox())?.height;
+      expect(expandedHeight).toBeGreaterThan(collapsedHeight!);
+      await testInfo.attach('preview-expanded.png', {
+        body: await explorePage.getByGrafanaSelector(selectors.components.QueryEditorRows.rows).screenshot(),
+        contentType: 'image/png',
+      });
+
+      await toggle.click();
+
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect.poll(async () => (await preview.boundingBox())?.height).toBe(collapsedHeight);
     });
 
     test('visual query builder should not crash when filter is set to select_any_in', async ({ explorePage, page }) => {
