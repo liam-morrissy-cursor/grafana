@@ -1864,6 +1864,9 @@ export const versionedComponents = {
     headerPreviewSwitch: {
       '11.0.0': 'data-testid header-preview-switch',
     },
+    previewToggleExpand: {
+      '13.2.0': 'data-testid preview-toggle-expand',
+    },
   },
   EntityNotFound: {
     container: {
