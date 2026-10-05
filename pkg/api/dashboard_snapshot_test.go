@@ -13,11 +13,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana/pkg/api/response"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/db/dbtest"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/accesscontrol/acimpl"
 	"github.com/grafana/grafana/pkg/services/accesscontrol/actest"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/services/dashboards"
 	"github.com/grafana/grafana/pkg/services/dashboardsnapshots"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
@@ -145,6 +147,7 @@ func TestDashboardSnapshotAPIEndpoint_singleSnapshot(t *testing.T) {
 				})
 				d := setUpSnapshotTest(t, 0, ts.URL)
 				hs := buildHttpServer(d, true)
+				hs.Cfg.SnapshotPublicMode = true
 
 				sc.handlerFunc = hs.DeleteDashboardSnapshotByDeleteKey
 				sc.fakeReqWithParams("GET", sc.url, map[string]string{"deleteKey": "12345"}).exec()
@@ -159,6 +162,45 @@ func TestDashboardSnapshotAPIEndpoint_singleSnapshot(t *testing.T) {
 				assert.Equal(t, ts.URL, fmt.Sprintf("http://%s", externalRequest.Host))
 				assert.Equal(t, "/api/snapshots-delete/54321", externalRequest.URL.EscapedPath())
 			})
+	})
+
+	t.Run("When public mode is off, delete-by-key is org-scoped", func(t *testing.T) {
+		loggedInUserScenarioWithRole(t,
+			"GET /snapshots-delete/{deleteKey} should return 404 for a snapshot owned by another org",
+			"GET", "/api/snapshots-delete/12345", "/api/snapshots-delete/:deleteKey", org.RoleEditor, func(sc *scenarioContext) {
+				dashSnapSvc := dashboardsnapshots.NewMockService(t)
+				dashSnapSvc.On("GetDashboardSnapshot", mock.Anything, mock.AnythingOfType("*dashboardsnapshots.GetDashboardSnapshotQuery")).
+					Return(&dashboardsnapshots.DashboardSnapshot{
+						ID:        1,
+						OrgID:     1,
+						Key:       "12345",
+						DeleteKey: "12345",
+					}, nil)
+				dashSnapSvc.On("DeleteDashboardSnapshot", mock.Anything, mock.Anything).
+					Return(nil).
+					Run(func(mock.Arguments) { t.Fatal("DeleteDashboardSnapshot should not be called for a cross-org snapshot") }).
+					Maybe()
+
+				hs := buildHttpServer(dashSnapSvc, true)
+				sc.handlerFunc = func(c *contextmodel.ReqContext) response.Response {
+					c.OrgID = 2
+					return hs.DeleteDashboardSnapshotByDeleteKey(c)
+				}
+				sc.fakeReqWithParams("GET", sc.url, map[string]string{"deleteKey": "12345"}).exec()
+
+				assert.Equal(t, http.StatusNotFound, sc.resp.Code, "BODY: "+sc.resp.Body.String())
+			}, sqlmock)
+
+		loggedInUserScenarioWithRole(t,
+			"GET /snapshots-delete/{deleteKey} should delete a same-org snapshot",
+			"GET", "/api/snapshots-delete/12345", "/api/snapshots-delete/:deleteKey", org.RoleEditor, func(sc *scenarioContext) {
+				d := setUpSnapshotTest(t, 0, "")
+				hs := buildHttpServer(d, true)
+				sc.handlerFunc = hs.DeleteDashboardSnapshotByDeleteKey
+				sc.fakeReqWithParams("GET", sc.url, map[string]string{"deleteKey": "12345"}).exec()
+
+				require.Equal(t, http.StatusOK, sc.resp.Code, "BODY: "+sc.resp.Body.String())
+			}, sqlmock)
 	})
 
 	t.Run("When deleting an external snapshot", func(t *testing.T) {

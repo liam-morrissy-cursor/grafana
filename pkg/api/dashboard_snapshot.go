@@ -190,6 +190,28 @@ func (hs *HTTPServer) DeleteDashboardSnapshotByDeleteKey(c *contextmodel.ReqCont
 		return response.Error(http.StatusNotFound, "Snapshot not found", nil)
 	}
 
+	// Lookups by deleteKey are global. When public mode is off the caller is an
+	// org-scoped principal (snapshots:delete); reject a snapshot owned by another
+	// org. Return NotFound so this endpoint is not a cross-org existence oracle.
+	// Public-mode (anonymous) deletes still treat deleteKey as the capability.
+	if !hs.Cfg.SnapshotPublicMode {
+		query := &dashboardsnapshots.GetDashboardSnapshotQuery{DeleteKey: key}
+		snap, err := hs.dashboardsnapshotsService.GetDashboardSnapshot(c.Req.Context(), query)
+		if err != nil {
+			if errors.Is(err, dashboardsnapshots.ErrBaseNotFound) {
+				return response.Error(http.StatusNotFound, "Snapshot not found", err)
+			}
+			return response.Error(http.StatusInternalServerError, "Failed to delete dashboard snapshot", err)
+		}
+		var callerOrgID int64
+		if c.SignedInUser != nil {
+			callerOrgID = c.GetOrgID()
+		}
+		if callerOrgID == 0 || snap.OrgID != callerOrgID {
+			return response.Error(http.StatusNotFound, "Snapshot not found", nil)
+		}
+	}
+
 	err := dashboardsnapshots.DeleteWithKey(c.Req.Context(), key, hs.dashboardsnapshotsService)
 	if err != nil {
 		if errors.Is(err, dashboardsnapshots.ErrBaseNotFound) {
